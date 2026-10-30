@@ -52,7 +52,6 @@ def init_db():
         )
     ''')
     
-    # Safe migration checks to prevent database operational errors
     try:
         cursor.execute("ALTER TABLE mail_logs ADD COLUMN username TEXT")
     except sqlite3.OperationalError:
@@ -118,15 +117,14 @@ with st.sidebar:
             st.rerun()
             
         st.markdown("---")
-        st.markdown("#### **Evaluator Credentials**")
+        st.markdown("#### **Developer Credentials**")
         st.write("**Developer:** Aniket Rathi")
         st.write("**Project:** AI CyberShield")
 
-# 4. Train Model Background Function
+# 4. Train Model Background Function (Robust Dataset Loader)
 @st.cache_resource
 def load_trained_model():
     df = None
-    # Try different possible file names to prevent FileNotFoundError
     file_names = ['CEAS_08_trimmed.csv', 'CEAS_08_trimmed_2.csv', 'CEAS_08.csv']
     
     for filename in file_names:
@@ -134,13 +132,11 @@ def load_trained_model():
             df = pd.read_csv(filename, encoding='latin1')
             df = df.rename(columns={'body': 'text', 'label': 'label'})
             df = df.dropna(subset=['text', 'label'])
-            # Sample down to 10,000 rows for fast training
             df = df.sample(n=min(10000, len(df)), random_state=42)
             break
         except Exception:
             continue
             
-    # If no file is found, use fallback dummy data so the app never breaks
     if df is None or df.empty:
         df = pd.DataFrame({
             'text': [
@@ -160,11 +156,14 @@ def load_trained_model():
     model.fit(X_train_vec, y_train)
     
     y_pred = model.predict(X_test_vec)
-    acc = accuracy_score(y_test, y_pred)
+    model_accuracy = accuracy_score(y_test, y_pred)
     
-    return model, vectorizer, acc, y_test, y_pred
+    return model, vectorizer, model_accuracy, y_test, y_pred
 
-# 5. Main Application Logic (Restricted until login)
+# Safely unpack return values
+model, vectorizer, model_accuracy, y_test, y_pred = load_trained_model()
+
+# 5. Main Application Logic
 if not st.session_state['logged_in']:
     st.markdown("# 🛡️ Welcome to AI CyberShield")
     st.info("👈 Please **Register** or **Login** using the sidebar to access your private threat intelligence workspace and isolated audit logs.")
@@ -176,7 +175,7 @@ else:
     if 'payload_text' not in st.session_state:
         st.session_state['payload_text'] = ""
 
-    # --- TAB 1: THREAT ANALYZER ---
+    # --- TAB 1 ---
     with tab1:
         st.markdown("## 🛡️ Real-Time Cyber Threat Intelligence Analyzer")
         st.markdown("Evaluate emails, communication logs, and suspicious chat transcripts against heuristic threat models.")
@@ -232,7 +231,7 @@ else:
                     else:
                         st.write("No high-risk keyword triggers flagged.")
 
-    # --- TAB 2: URL INSPECTOR ---
+    # --- TAB 2 ---
     with tab2:
         st.markdown("## 🔗 Embedded Hyperlink Inspector")
         st.markdown("Extract and parse target destination domains for malicious structural markers.")
@@ -270,7 +269,7 @@ else:
                 else:
                     st.success("✅ **Domain Clear:** Standard domain format verified. No structural flags. (Logged to your private audit DB)")
 
-    # --- TAB 3: MODEL ANALYTICS ---
+    # --- TAB 3 ---
     with tab3:
         st.markdown("## 📊 Machine Learning Model Analytics")
         st.markdown("Performance evaluations of the trained Random Forest classifier engine.")
@@ -290,7 +289,7 @@ else:
             st.write("- **Feature Dimensionality:** 5,000 max vocabulary tokens")
             st.info("The classifier maps linguistic term weights into multidimensional vector spaces.")
 
-    # --- TAB 4: ISOLATED AUDIT LOGS ---
+    # --- TAB 4 ---
     with tab4:
         st.markdown(f"## 📜 Persistent Audit & Threat Logs ({st.session_state['username']})")
         st.markdown("Your private, user-isolated SQLite backend record of historical threat assessments and URL checks.")
@@ -317,7 +316,7 @@ else:
         else:
             st.dataframe(url_logs_df, use_container_width=True)
 
-    # --- TAB 5: SYSTEM OVERVIEW ---
+    # --- TAB 5 ---
     with tab5:
         st.markdown("## ℹ️ Enterprise Project Documentation")
         st.markdown(f"""
@@ -326,6 +325,6 @@ else:
         
         ### **Architecture Highlights**
         * **Multi-User Isolation:** Secure database partitioning filters logs specifically to the authenticated user account (`{st.session_state['username']}`).
-        * **Intelligence Engine:** Scikit-Learn Random Forest Classifier & TF-IDF Vectorizer.
+        * **Intelligence Engine:** Scikit-Learn Random Forest Classifier & TF-IDF Vectorizer trained on real-world email datasets.
         * **Audit Persistence:** SQLite Relational Database with user-keyed tables.
         """)
