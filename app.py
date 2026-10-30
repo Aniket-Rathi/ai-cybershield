@@ -18,12 +18,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1. Database Setup with Users & Isolated Tables
+# 1. Database Setup with Users & Schema Migration Safeguards
 def init_db():
     conn = sqlite3.connect('threat_logs.db', check_same_thread=False)
     cursor = conn.cursor()
     
-    # Users table for authentication
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -31,7 +30,6 @@ def init_db():
         )
     ''')
     
-    # Mail logs table with username foreign key / ownership
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS mail_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +41,6 @@ def init_db():
         )
     ''')
     
-    # URL logs table with username foreign key / ownership
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS url_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,13 +51,25 @@ def init_db():
             confidence REAL
         )
     ''')
+    
+    # Safe migration checks to prevent database operational errors
+    try:
+        cursor.execute("ALTER TABLE mail_logs ADD COLUMN username TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE url_logs ADD COLUMN username TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
     conn.commit()
     return conn
 
 conn = init_db()
 cursor = conn.cursor()
 
-# 2. Authentication Session State Management
+# 2. Authentication State Management
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
@@ -109,7 +118,7 @@ with st.sidebar:
             st.rerun()
             
         st.markdown("---")
-        st.markdown("#### **Developer Credentials**")
+        st.markdown("#### **Evaluator Credentials**")
         st.write("**Developer:** Aniket Rathi")
         st.write("**Project:** AI CyberShield")
 
@@ -154,7 +163,7 @@ def load_trained_model():
 
 model, vectorizer, model_accuracy, y_test, y_pred = load_trained_model()
 
-# 5. Main Application Logic (Restricted if not logged in)
+# 5. Main Application Logic (Restricted until login)
 if not st.session_state['logged_in']:
     st.markdown("# 🛡️ Welcome to AI CyberShield")
     st.info("👈 Please **Register** or **Login** using the sidebar to access your private threat intelligence workspace and isolated audit logs.")
@@ -166,7 +175,7 @@ else:
     if 'payload_text' not in st.session_state:
         st.session_state['payload_text'] = ""
 
-    # --- TAB 1 ---
+    # --- TAB 1: THREAT ANALYZER ---
     with tab1:
         st.markdown("## 🛡️ Real-Time Cyber Threat Intelligence Analyzer")
         st.markdown("Evaluate emails, communication logs, and suspicious chat transcripts against heuristic threat models.")
@@ -197,7 +206,6 @@ else:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     res_label = "Phishing / Malicious" if prediction == 1 else "Safe / Legitimate"
                     
-                    # Insert with current username
                     cursor.execute("INSERT INTO mail_logs (username, timestamp, input_text, result, confidence) VALUES (?, ?, ?, ?, ?)",
                                    (st.session_state['username'], timestamp, user_input, res_label, confidence))
                     conn.commit()
@@ -223,7 +231,7 @@ else:
                     else:
                         st.write("No high-risk keyword triggers flagged.")
 
-    # --- TAB 2 ---
+    # --- TAB 2: URL INSPECTOR ---
     with tab2:
         st.markdown("## 🔗 Embedded Hyperlink Inspector")
         st.markdown("Extract and parse target destination domains for malicious structural markers.")
@@ -247,7 +255,6 @@ else:
                     url_confidence = 96.0
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # Insert with current username
                 cursor.execute("INSERT INTO url_logs (username, timestamp, target_url, result, confidence) VALUES (?, ?, ?, ?, ?)",
                                (st.session_state['username'], timestamp, target_url, url_res_label, url_confidence))
                 conn.commit()
@@ -262,7 +269,7 @@ else:
                 else:
                     st.success("✅ **Domain Clear:** Standard domain format verified. No structural flags. (Logged to your private audit DB)")
 
-    # --- TAB 3 ---
+    # --- TAB 3: MODEL ANALYTICS ---
     with tab3:
         st.markdown("## 📊 Machine Learning Model Analytics")
         st.markdown("Performance evaluations of the trained Random Forest classifier engine.")
@@ -282,7 +289,7 @@ else:
             st.write("- **Feature Dimensionality:** 5,000 max vocabulary tokens")
             st.info("The classifier maps linguistic term weights into multidimensional vector spaces.")
 
-    # --- TAB 4 (ISOLATED AUDIT LOGS) ---
+    # --- TAB 4: ISOLATED AUDIT LOGS ---
     with tab4:
         st.markdown(f"## 📜 Persistent Audit & Threat Logs ({st.session_state['username']})")
         st.markdown("Your private, user-isolated SQLite backend record of historical threat assessments and URL checks.")
@@ -309,7 +316,7 @@ else:
         else:
             st.dataframe(url_logs_df, use_container_width=True)
 
-    # --- TAB 5 ---
+    # --- TAB 5: SYSTEM OVERVIEW ---
     with tab5:
         st.markdown("## ℹ️ Enterprise Project Documentation")
         st.markdown(f"""
