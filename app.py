@@ -125,43 +125,42 @@ with st.sidebar:
 # 4. Train Model Background Function
 @st.cache_resource
 def load_trained_model():
-    data = {
-        'text': [
-            "Urgent! Your bank account has been locked due to unauthorized access. Click here to verify your identity immediately.",
-            "Alert: We detected suspicious login attempts on your debit card. Confirm your PIN and account number via this secure portal.",
-            "Your online banking profile is suspended. Update your security credentials within 24 hours to prevent account closure.",
-            "Congratulations! You won a brand new iPhone 15 Pro. Claim your prize now by entering your credit card details.",
-            "Exclusive crypto giveaway! Send 0.1 BTC to this wallet address to receive 1 BTC back instantly.",
-            "Free entry into a $50,000 cash prize draw! Text CLAIM to 85215 or click the link to claim your reward.",
-            "Verify your Apple ID immediately or your iCloud account will be permanently suspended.",
-            "Security Alert: Someone tried logging into your Google account from an unknown device. Reset your password here.",
-            "Your Netflix subscription has expired. Update your payment information right now to resume streaming.",
-            "Your parcel delivery is on hold due to unpaid customs fees of $2.99. Pay now via this tracking link.",
-            "Please find attached the quarterly financial report and budget projections for your review.",
-            "Reminder: Team sync meeting scheduled for 10:00 AM on Monday in Conference Room B.",
-            "Can you review the attached presentation slides before our client call this afternoon?",
-            "Hi team, please submit your travel expense reports and receipts by the end of the week.",
-            "Hi Aniket, I finished reviewing your python code script. Great job on optimizing the functions!",
-            "Hey, are we still meeting for lunch tomorrow at 1 PM near the campus?",
-            "Hi Mom, I'll be home late tonight after my study group session, don't wait up for dinner.",
-            "Hey Aniket, are you joining the library study group later today? Let me know.",
-            "Your medical appointment with Dr. Smith is confirmed for Thursday at 10:30 AM.",
-            "Thanks for your help with the project debugging yesterday. Have a wonderful weekend!"
-        ],
-        'label': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    }
-    df = pd.DataFrame(data)
+    try:
+        # Load your CEAS_08 dataset using pandas with robust encoding
+        df = pd.read_csv('CEAS_08_trimmed.csv', encoding='latin1')
+        
+        # Map the dataset columns to what our model expects ('text' and 'label')
+        df = df.rename(columns={'body': 'text', 'label': 'label'})
+        
+        # Drop rows with missing values
+        df = df.dropna(subset=['text', 'label'])
+        
+        # Sample down to 10,000 rows for lightning-fast training speed on Streamlit Cloud
+        df = df.sample(n=min(10000, len(df)), random_state=42)
+        
+    except Exception as e:
+        # Fallback dummy dataset if file isn't found
+        df = pd.DataFrame({
+            'text': [
+                "Urgent! Your bank account has been locked. Verify now.",
+                "Reminder: Team sync meeting at 10 AM on Monday."
+            ],
+            'label': [1, 0]
+        })
+
     X_train, X_test, y_train, y_test = train_test_split(df['text'], df['label'], test_size=0.2, random_state=42)
+    
     vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
+    
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train_vec, y_train)
+    
     y_pred = model.predict(X_test_vec)
     acc = accuracy_score(y_test, y_pred)
+    
     return model, vectorizer, acc, y_test, y_pred
-
-model, vectorizer, model_accuracy, y_test, y_pred = load_trained_model()
 
 # 5. Main Application Logic (Restricted until login)
 if not st.session_state['logged_in']:
