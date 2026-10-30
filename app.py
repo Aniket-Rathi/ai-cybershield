@@ -125,21 +125,23 @@ with st.sidebar:
 # 4. Train Model Background Function
 @st.cache_resource
 def load_trained_model():
-    try:
-        # Load your CEAS_08 dataset using pandas with robust encoding
-        df = pd.read_csv('CEAS_08_trimmed.csv', encoding='latin1')
-        
-        # Map the dataset columns to what our model expects ('text' and 'label')
-        df = df.rename(columns={'body': 'text', 'label': 'label'})
-        
-        # Drop rows with missing values
-        df = df.dropna(subset=['text', 'label'])
-        
-        # Sample down to 10,000 rows for lightning-fast training speed on Streamlit Cloud
-        df = df.sample(n=min(10000, len(df)), random_state=42)
-        
-    except Exception as e:
-        # Fallback dummy dataset if file isn't found
+    df = None
+    # Try different possible file names to prevent FileNotFoundError
+    file_names = ['CEAS_08_trimmed.csv', 'CEAS_08_trimmed_2.csv', 'CEAS_08.csv']
+    
+    for filename in file_names:
+        try:
+            df = pd.read_csv(filename, encoding='latin1')
+            df = df.rename(columns={'body': 'text', 'label': 'label'})
+            df = df.dropna(subset=['text', 'label'])
+            # Sample down to 10,000 rows for fast training
+            df = df.sample(n=min(10000, len(df)), random_state=42)
+            break
+        except Exception:
+            continue
+            
+    # If no file is found, use fallback dummy data so the app never breaks
+    if df is None or df.empty:
         df = pd.DataFrame({
             'text': [
                 "Urgent! Your bank account has been locked. Verify now.",
